@@ -6,6 +6,7 @@ from handlers.start import router as start_router
 from handlers.tasks import router as tasks_router
 from database import create_tables
 from app_logging import setup_logging
+from cron import cron
 
 # Объект для записей в журнал: сюда бот будет писать, что он запустился и что база готова.
 logger = logging.getLogger(__name__)
@@ -28,6 +29,10 @@ async def main():
     dp.include_router(tasks_router)
 
     logger.info("Bot started")
+
+    # Запускаем отдельный цикл напоминаний, который будет работать рядом с ботом.
+    create_task(cron(bot))
+    logger.info("Cron started")
 
     # Бот начинает постоянно ждать новые сообщения и нажатия кнопок от пользователей.
     await dp.start_polling(bot)

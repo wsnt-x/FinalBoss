@@ -1,8 +1,9 @@
-from datetime import date  # работа с датами
-from sqlalchemy import Integer, String, Date, Boolean, select  # типы данных и инструмент для запросов
+from datetime import date, datetime  # работа с датами
+from sqlalchemy import Integer, String, Date, DateTime, Boolean, select  # типы данных и инструмент для запросов
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker  # подключение и работа с базой
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column  # описание таблиц через Python-классы
-
+from sqlalchemy.testing.suite.test_reflection import users
+from aiogram.types import Message
 
 # Подключение к файлу базы данных tasks.db.
 # В этом файле будут храниться все задачи.
@@ -27,6 +28,9 @@ class DayTask(Base):
     description: Mapped[str | None] = mapped_column(String)  # описание может быть пустым
     task_date: Mapped[date] = mapped_column(Date, nullable=False)  # дата задачи
     is_done: Mapped[bool] = mapped_column(Boolean, default=False)  # выполнена или нет
+    user_id: Mapped[str] = mapped_column(String, default=False)
+    remind_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_reminded: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 async def create_tables() -> None:
@@ -39,15 +43,19 @@ async def create_tables() -> None:
 # Добавляет новую задачу в базу данных и возвращает ее номер.
 async def add_task(
     title: str,
+    user_id: int,
     description: str | None = None,
-    task_date: date | None = None
+    task_date: date | None = None,
+    remind_at: datetime | None = None
 ) -> int:
     async with Session() as session:
         # Создаем новую задачу в памяти программы.
         task = DayTask(
             title=title,
+            user_id=user_id,
             description=description,
-            task_date=task_date or date.today()  # если дата не передана, ставим сегодня
+            task_date=task_date or date.today(),
+            remind_at=remind_at
         )
 
         # Добавляем задачу в базу и сохраняем изменения.
@@ -127,3 +135,31 @@ async def delete_task(task_id: int) -> bool:
         await session.commit()
 
         return True
+
+#
+# async def main() -> None:
+#     await create_tables()  # создаем таблицы
+#     #пример добавления задачи
+#     task_id = await add_task(
+#         title="Купить продукты",
+#         description="Молоко, яйца, хлеб",
+#         task_date=date.today(),
+#         user_id=message.from_user.id,
+#     )
+#     #пример обновления задачи
+#     await update_task(
+#         task_id=task_id,
+#         is_done=True
+#     )
+#     #пример получения задачи
+#     tasks = await get_tasks(date.today())
+#
+#     for task in tasks:
+#         print(task.id, task.title, task.description, task.task_date, task.is_done)
+#
+#     await delete_task(task_id)
+# # k = 1 * (4.6 - 2) / 0.4 =
+# if __name__ == "__main__":
+#     import asyncio  # запуск асинхронного кода
+#
+#     asyncio.run(main())  # стартуем event loop

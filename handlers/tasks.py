@@ -1,5 +1,5 @@
 from aiogram.fsm.context import FSMContext
-from datetime import date
+from datetime import date, datetime
 from keyboards.inline import delete_task_keyboard, toggle_task_keyboard
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -11,8 +11,8 @@ from lexicons.lexicons_ru import START_BTN_1, START_BTN_2, START_BTN_3, START_BT
 # Состояние "бот ждет название задачи".
 # Оно нужно, чтобы бот понимал: следующее сообщение пользователя надо сохранить как задачу.
 class AddTask(StatesGroup):
-    waiting_title=State()
-
+    waiting_title = State()
+    waiting_remind_time = State()
 
 # Здесь собираются все реакции бота, которые относятся к задачам.
 router=Router()
@@ -111,8 +111,14 @@ async def waiting_title_handler(message: Message, state: FSMContext):
         await message.answer("⚠️ Название задачи не может быть пустым.")
         return
 
-    # Записываем задачу в базу данных.
-    task_id = await add_task(title=title)
+    # Пока не сохраняем задачу в базу.
+    # Сначала запоминаем название и просим пользователя ввести время напоминания.
+    await state.update_data(title=title)
+    await state.set_state(AddTask.waiting_remind_time)
+
+    await message.answer(
+        "⏰ Введите время напоминания в формате ЧЧ:ММ\n\nНапример: 18:30"
+    )
 
     # Сбрасываем режим ожидания названия: бот снова работает в обычном режиме.
     await state.clear()
@@ -121,6 +127,35 @@ async def waiting_title_handler(message: Message, state: FSMContext):
         parse_mode="HTML"
     )
 
+@router.message(AddTask.waiting_remind_time)
+async def waiting_remind_time_handler(message: Message, state: FSMContext):
+    remind_time_text = message.text.strip()
+
+    try:
+        remind_time = datetime.strptime(remind_time_text, "%H:%M").time()
+    except ValueError:
+        await message.answer("Введите время в формате ЧЧ:ММ, например 18:30.")
+        return
+
+    remind_at = datetime.combine(date.today(), remind_time)
+
+    data = await state.get_data()
+    title = data["title"]
+
+    task_id = await add_task(
+        title=title,
+        user_id=message.from_user.id,
+        remind_at=remind_at
+    )
+
+    await state.clear()
+
+    await message.answer(
+        f"✅ <b>Задача добавлена</b>\n\n"
+        f"{title}\n\n"
+        f"⏰ Напомню в {remind_time_text}",
+        parse_mode="HTML"
+    )
 
 @router.message(F.text == START_BTN_2)
 async def list_tasks_message_handler(message: Message):
